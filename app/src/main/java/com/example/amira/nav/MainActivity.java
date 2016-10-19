@@ -1,11 +1,21 @@
 package com.example.amira.nav;
 
 
+
+
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.location.Location;
 import android.location.LocationListener;
+import android.location.LocationManager;
+import android.os.AsyncTask;
+import android.provider.Settings;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.widget.DrawerLayout;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
@@ -13,71 +23,42 @@ import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
-import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ListView;
-import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.GooglePlayServicesUtil;
-import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationServices;
-
 import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 
-public class MainActivity extends AppCompatActivity  implements
-        LocationListener,
-        GoogleApiClient.ConnectionCallbacks,
-        GoogleApiClient.OnConnectionFailedListener {
-    private static final String TAG = "LocationActivity";
-    private static final long INTERVAL = 1000 * 10;
-    private static final long FASTEST_INTERVAL = 1000 * 5;
-    Button enter;
-    LocationRequest mLocationRequest;
-    GoogleApiClient mGoogleApiClient;
-    Location mCurrentLocation;
-    String mLastUpdateTime;
+public class MainActivity extends AppCompatActivity implements  LocationListener {
+
+
     private String[] mNavigationDrawerItemTitles;
     private DrawerLayout mDrawerLayout;
     private ListView mDrawerList;
     Toolbar toolbar;
     private CharSequence mDrawerTitle;
     private CharSequence mTitle;
-    EditText text;
+    long datestart;
+    long dateend;
+    long spend;
+    long satrt,end;
     android.support.v7.app.ActionBarDrawerToggle mDrawerToggle;
 
-    protected void createLocationRequest() {
-        mLocationRequest = new LocationRequest();
-        mLocationRequest.setInterval(INTERVAL);
-        mLocationRequest.setFastestInterval(FASTEST_INTERVAL);
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-    }
+    private LocationManager locationManager;
 
+    Location myLocation=null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.d(TAG, "onCreate ...............................");
-        //show error dialog if GoolglePlayServices not available
-        if (!isGooglePlayServicesAvailable()) {
-            finish();
-        }
-        createLocationRequest();
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addApi(LocationServices.API)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .build();
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
         mTitle = mDrawerTitle = getTitle();
         mNavigationDrawerItemTitles= getResources().getStringArray(R.array.navigation_drawer_items_array);
         mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
         mDrawerList = (ListView) findViewById(R.id.left_drawer);
-
-        text=(EditText)findViewById(R.id.editText);
         setupToolbar();
 
         DataModel[] drawerItem = new DataModel[2];
@@ -98,13 +79,49 @@ public class MainActivity extends AppCompatActivity  implements
         Fragment fragment = new MainFragment();
         FragmentManager fragmentManager = getSupportFragmentManager();
         fragmentManager.beginTransaction().replace(R.id.content_frame, fragment).commit();
-        enter=(Button)findViewById(R.id.btn);
-        enter.setOnClickListener(new View.OnClickListener() {
-    @Override
-    public void onClick(View view) {
-        updateUI();
+
+
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+
+
+
     }
-});
+
+    public void click(View v){
+
+        LocationManager service = (LocationManager) getSystemService(LOCATION_SERVICE);
+        boolean enabled = service.isProviderEnabled(LocationManager.GPS_PROVIDER);
+
+        // Check if enabled and if not send user to the GPS settings
+        if (!enabled) {
+            Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+            startActivity(intent);
+
+            return;
+        }
+
+
+        GetLocationTask task = new GetLocationTask();
+        task.execute();
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        myLocation = location;
+    }
+
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {
+
+    }
+
+    @Override
+    public void onProviderEnabled(String provider) {
+
+    }
+
+    @Override
+    public void onProviderDisabled(String provider) {
 
     }
 
@@ -146,111 +163,80 @@ public class MainActivity extends AppCompatActivity  implements
             Log.e("MainActivity", "Error in creating fragment");
         }
     }
-    @Override
-    public void onStart() {
-        super.onStart();
-        Log.d(TAG, "onStart fired ..............");
-        mGoogleApiClient.connect();
-    }
 
-    @Override
-    public void onStop() {
-        super.onStop();
-        Log.d(TAG, "onStop fired ..............");
-        mGoogleApiClient.disconnect();
-        Log.d(TAG, "isConnected ...............: " + mGoogleApiClient.isConnected());
-    }
 
-    private boolean isGooglePlayServicesAvailable() {
-        int status = GooglePlayServicesUtil.isGooglePlayServicesAvailable(this);
-        if (ConnectionResult.SUCCESS == status) {
-            return true;
-        } else {
-            GooglePlayServicesUtil.getErrorDialog(status, this, 0).show();
-            return false;
+    class GetLocationTask extends AsyncTask<Void, Void, Void> {
+
+        ProgressDialog waitDialog = new ProgressDialog(MainActivity.this);
+
+        @Override
+        protected void onPreExecute() {
+
+            waitDialog.setMessage("GPS Loading. Please wait...");
+            waitDialog.setIndeterminate(true);
+            waitDialog.setCanceledOnTouchOutside(false);
+            waitDialog.show();
+
         }
-    }
 
-    @Override
-    public void onConnected(Bundle bundle) {
-        Log.d(TAG, "onConnected - isConnected ...............: " + mGoogleApiClient.isConnected());
-        startLocationUpdates();
-    }
+        @Override
+        protected Void doInBackground(Void... params) {
 
-    protected void startLocationUpdates() {
-      /*  PendingResult<Status> pendingResult = LocationServices.FusedLocationApi.requestLocationUpdates(
-                mGoogleApiClient, mLocationRequest, this);*/
-        Log.d(TAG, "Location update started ..............: ");
-    }
+            try {
 
-    @Override
-    public void onConnectionSuspended(int i) {
+                while (myLocation == null) {
 
-    }
+                    publishProgress();
 
-    @Override
-    public void onConnectionFailed(ConnectionResult connectionResult) {
-        Log.d(TAG, "Connection failed: " + connectionResult.toString());
-    }
+                    //locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, MapsActivity.this);
 
-    @Override
-    public void onLocationChanged(Location location) {
-        Log.d(TAG, "Firing onLocationChanged..............................................");
-        mCurrentLocation = location;
-        mLastUpdateTime = DateFormat.getTimeInstance().format(new Date());
-        updateUI();
-    }
+                    locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                    locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
 
-    @Override
-    public void onStatusChanged(String s, int i, Bundle bundle) {
 
-    }
+                    if (myLocation != null) {
 
-    @Override
-    public void onProviderEnabled(String s) {
+                        // onLocationChanged(location);
+                        break;
+                    }
+                    Thread.sleep(5000);
+                }
 
-    }
 
-    @Override
-    public void onProviderDisabled(String s) {
 
-    }
+            }
+            catch (Exception e) {
+                Log.d("test", e.toString());
+            }
 
-    private void updateUI() {
-        Log.d(TAG, "UI update initiated .............");
-        if (null != mCurrentLocation) {
-            String lat = String.valueOf(mCurrentLocation.getLatitude());
-            String lng = String.valueOf(mCurrentLocation.getLongitude());
-            Toast.makeText(getApplicationContext(),"At Time: " + mLastUpdateTime + "\n" +
-                    "Latitude: " + lat + "\n" +
-                    "Longitude: " + lng + "\n" +
-                    "Accuracy: " + mCurrentLocation.getAccuracy() + "\n",Toast.LENGTH_LONG).show();
-        } else {
-            Log.d(TAG, "location is null ...............");
+
+            return null;
         }
-    }
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        stopLocationUpdates();
-    }
+        @Override
+        protected void onProgressUpdate(Void ...x) {
 
-    protected void stopLocationUpdates() {
-       /* LocationServices.FusedLocationApi.removeLocationUpdates(
-                mGoogleApiClient, this);*/
-        Log.d(TAG, "Location update stopped .......................");
-    }
+            // locationManager.requestSingleUpdate(LocationManager.NETWORK_PROVIDER, MapsActivity.this, null);
 
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (mGoogleApiClient.isConnected()) {
-            startLocationUpdates();
-            Log.d(TAG, "Location update resumed .....................");
+            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, MainActivity.this);
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, MainActivity.this);
+
+
         }
-    }
 
+        @Override
+        protected void onPostExecute(Void result) {
+
+            waitDialog.dismiss();
+
+            String str = "lat=" + String.valueOf(myLocation.getLatitude()) + " ,lng=" +String.valueOf(myLocation.getLongitude());
+
+            Toast.makeText(getApplicationContext(),str,Toast.LENGTH_LONG).show();
+
+
+        }
+
+    }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
@@ -284,6 +270,66 @@ public class MainActivity extends AppCompatActivity  implements
         mDrawerToggle = new android.support.v7.app.ActionBarDrawerToggle(this,mDrawerLayout,toolbar,R.string.app_name, R.string.app_name);
         //This is necessary to change the icon of the Drawer Toggle upon state change.
         mDrawerToggle.syncState();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        datestart = System.currentTimeMillis();
+        SimpleDateFormat formater=new SimpleDateFormat("hh:mm:ss");
+        String dates=formater.format(new Date(datestart));
+        Toast.makeText(getApplicationContext(),"time is"+dates,Toast.LENGTH_LONG).show();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        dateend = System.currentTimeMillis()-datestart;
+        SimpleDateFormat formater=new SimpleDateFormat("hh:mm:ss");
+        String date=formater.format(new Date(dateend));
+        Toast.makeText(getApplicationContext(),"time is ended"+date,Toast.LENGTH_LONG).show();
+
+    }
+    @Override
+
+    public void onBackPressed() {
+        //Display alert message when back button has been pressed
+        backButtonHandler();
+
+        return;
+    }
+
+    public void backButtonHandler() {
+        AlertDialog.Builder alertDialog = new AlertDialog.Builder(
+                MainActivity.this);
+        // Setting Dialog Title
+        alertDialog.setTitle("Leave application?");
+        // Setting Dialog Message
+
+
+        SimpleDateFormat formater=new SimpleDateFormat("hh:mm:ss");
+        String date=formater.format(new Date(dateend));
+        alertDialog.setMessage("You spend "+date);
+        // Setting Icon to Dialog
+        // Setting Positive "Yes" Button
+        alertDialog.setPositiveButton("YES",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+
+                        finish();
+                    }
+                });
+        // Setting Negative "NO" Button
+        alertDialog.setNegativeButton("NO",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        // Write your code here to invoke NO event
+
+                        dialog.cancel();
+                    }
+                });
+        // Showing Alert Message
+        alertDialog.show();
     }
 
 }
