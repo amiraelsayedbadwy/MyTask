@@ -284,9 +284,16 @@ public class MainActivity extends AppCompatActivity implements  LocationListener
     @Override
     protected void onStop() {
         super.onStop();
-        dateend = System.currentTimeMillis()-datestart;
-        SimpleDateFormat formater=new SimpleDateFormat("hh:mm:ss");
-        String date=formater.format(new Date(dateend));
+        dateend = System.currentTimeMillis() -datestart;
+        Log.d("test", String.valueOf(dateend));
+
+        int seconds = (int) (dateend / 1000) % 60 ;
+        int minutes = (int) ((dateend / (1000*60)) % 60);
+        int hours   = (int) ((dateend / (1000*60*60)) % 24);
+
+
+        String date= String.valueOf(hours) + ":" + String.valueOf(minutes) + ":" + String.valueOf(seconds) ;
+
         Toast.makeText(getApplicationContext(),"time is ended"+date,Toast.LENGTH_LONG).show();
 
     }
